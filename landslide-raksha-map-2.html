@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Landslide Raksha — Early Warning Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@300;400;500;700;800&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--bg:#F1F1F1;--sf:#fff;--ink:#111;--mu:#667075;--ln:#DADDDD;--panel:#9DB9C0;--pmu:#2F454A;--ac:#00B2E8;--act:#0A7FA6;--pill:#111;--pillf:#fff;--land:#CFE0E4;--gl:rgba(255,255,255,.55);--glb:rgba(255,255,255,.7);
+--low:#2FA672;--mod:#D9A91B;--high:#E4782B;--crit:#D93B3B;
+color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 'Schibsted Grotesk',system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+button:focus-visible,input:focus-visible,select:focus-visible,li:focus-visible,.zone:focus-visible{outline:3px solid var(--act);outline-offset:2px}
+.glass{background:var(--gl);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glb)}
+.hdr{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:20;padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;justify-content:space-between}
+.brand{padding:9px 16px;border-radius:99px;font-weight:800;letter-spacing:-.01em}
+.loc{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-radius:99px;font-size:.88rem}
+.loc .pin{background:var(--sf);border-radius:99px;padding:2px 10px;font-weight:700}
+.picker{display:flex;align-items:center;gap:10px}
+.plabel{font-weight:300;font-size:.85rem;white-space:nowrap}
+.dd{position:relative}
+.pbtn{display:flex;gap:10px;align-items:center;border:0;background:var(--pill);color:var(--pillf);padding:9px 16px;border-radius:99px;font:inherit;font-weight:700;font-size:.9rem;cursor:pointer}
+.menu{position:absolute;right:0;top:calc(100% + 6px);width:220px;margin:0;padding:6px;list-style:none;background:var(--sf);border:1px solid var(--ln);border-radius:20px}
+.menu[hidden]{display:none}
+.menu li{padding:9px 14px;border-radius:14px;cursor:pointer;font-weight:500}
+.menu li:hover{background:var(--bg)}
+.menu li[aria-selected=true]{background:var(--pill);color:var(--pillf)}
+@media(max-width:760px){.loc{order:3;flex:1 0 100%;justify-content:center}}
+.hero{position:relative;overflow:hidden;background:var(--land);height:780px;padding:100px 18px 40px}
+.mapfull{position:absolute;inset:0}.mapfull{z-index:0;background:var(--land)}.leaflet-container{font-family:inherit}
+.zm{position:relative;width:0;height:0}.zm i{position:absolute;left:calc(var(--d)/-2);top:calc(var(--d)/-2);width:var(--d);height:var(--d);border-radius:50%;border:2px solid var(--c);cursor:pointer}
+.zm i::before{content:"";position:absolute;inset:0;border-radius:50%;background:var(--c);opacity:.3}.zm i::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;background:var(--c)}
+.zm.sel i{border-width:5px}.zm b{position:absolute;left:calc(var(--d)/-2);top:calc(var(--d)/-2);width:var(--d);height:var(--d);border-radius:50%;border:3px solid var(--c);animation:pl 2s ease-out infinite;pointer-events:none}
+.zm span{position:absolute;top:calc(var(--d)/2 + 4px);left:0;transform:translateX(-50%);white-space:nowrap;font:700 13px 'Schibsted Grotesk',sans-serif;color:var(--ink);background:var(--glb);padding:1px 9px;border-radius:99px}
+@media(prefers-reduced-motion:reduce){.zm b{animation:none}}
+.hov{position:relative;z-index:1;pointer-events:none;max-width:none;margin:0 -4px}
+.hl{width:min(100%,400px);display:flex;flex-direction:column;gap:12px}.hl>*{pointer-events:auto}
+
+@media(max-width:860px){.hero{height:auto;padding:150px 14px 340px}}
+
+h1{font-size:clamp(2.1rem,5vw,3.3rem);line-height:1.03;letter-spacing:-.025em;font-weight:800;margin:0}
+h2{font-size:1.4rem;margin:0 0 4px;letter-spacing:-.01em}h3{font-size:1rem;margin:0 0 8px}
+.lead{margin:10px 0 0;max-width:40ch}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:28px;padding:18px}
+.card.glass{background:var(--gl)}
+.mu{color:var(--mu);font-size:.88rem}
+.g,.steps{display:grid;gap:14px;padding-bottom:30px}
+.g{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.steps{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.g>.card:nth-child(even),.steps>.card:nth-child(even){transform:translateY(26px)}
+.g>.card:nth-child(3n+1),.steps>.card:nth-child(3n+1){background:var(--panel)}
+.g>.card:nth-child(3n+1) .mu,.steps>.card:nth-child(3n+1) .mu{color:var(--pmu)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sp{justify-content:space-between}
+.b{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:700;font-size:.8rem;color:#fff;white-space:nowrap}
+.b.low{background:var(--low)}.b.mod{background:var(--mod);color:#1a1a1a}.b.high{background:var(--high)}.b.crit{background:var(--crit)}
+.btn{border:1px solid var(--ln);background:var(--sf);color:var(--ink);padding:8px 15px;border-radius:99px;font:inherit;font-weight:600;font-size:.9rem;cursor:pointer}
+.btn.p{background:var(--ac);color:#06222B;border-color:var(--ac)}.btn.d{background:var(--crit);color:#fff;border-color:var(--crit)}
+input[type=range]{width:100%;accent-color:var(--ac)}
+select,input[type=file]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--ln);border-radius:14px;padding:8px;margin:4px 0 10px}
+.big{font-size:2.6rem;font-weight:800;line-height:1;letter-spacing:-.03em}
+.zone{cursor:pointer}.zone text{font:700 15px 'Schibsted Grotesk',sans-serif;fill:var(--ink);paint-order:stroke;stroke:var(--land);stroke-width:4px}
+.ring{transform-box:fill-box;transform-origin:center;animation:pl 2s ease-out infinite}
+@keyframes pl{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.7);opacity:0}}
+@media(prefers-reduced-motion:reduce){.ring{animation:none}}
+table{width:100%;border-collapse:collapse;font-size:.92rem}th{text-align:left;color:var(--mu);font-weight:500;font-size:.82rem}
+th,td{padding:8px 6px;border-bottom:1px solid var(--ln);vertical-align:middle}
+.tw{overflow-x:auto}
+.meter{height:7px;background:var(--ln);border-radius:9px;min-width:60px;overflow:hidden}.meter i{display:block;height:100%}
+.sms{background:var(--bg);border:1px solid var(--ln);border-radius:20px 20px 20px 4px;padding:12px;font-size:.88rem;max-width:34ch;color:var(--ink)}
+.sec{position:relative;padding:34px 0 14px}.sec>.wrap>h2{margin-bottom:2px}
+.dash{position:absolute;left:0;top:0;width:100%;height:150px;fill:none;stroke:var(--mu);stroke-opacity:.4;stroke-dasharray:6 8;stroke-width:1.5;pointer-events:none}
+.step b{display:block;font-size:1.6rem;color:var(--act);line-height:1}.steps>.card:nth-child(3n+1) b{color:var(--ink)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--pill);color:var(--pillf);padding:10px 16px;border-radius:99px;font-weight:600;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:30}
+#toast.on{opacity:1}
+footer{padding:26px 0 30px;color:var(--mu);font-size:.85rem}
+ul.clean{list-style:none;margin:0;padding:0}ul.clean li{padding:8px 0;border-bottom:1px solid var(--ln)}ul.clean li:last-child{border:0}
+</style></head><body>
+<div class="hdr">
+ <div class="brand glass">Landslide Raksha</div>
+ <div class="loc glass" title="Sample location"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><b>Pune, Maharashtra</b><span class="pin">411001</span></div>
+ <div class="picker"><span class="plabel">Select user type</span>
+  <div class="dd"><button class="pbtn" id="pbtn" aria-haspopup="listbox" aria-expanded="false"><span id="pcur">Citizen</span><span aria-hidden="true">▾</span></button>
+  <ul class="menu" id="menu" role="listbox" hidden></ul></div></div>
+</div>
+
+<main>
+<section class="hero">
+ <div id="map" class="mapfull"></div>
+ <div class="hov"><div class="hl">
+  <div class="card glass"><h1>Know which slope is next.</h1>
+  <p class="lead">Live weather and terrain data become a risk level for each road, slope and colony. Alerts reach everyone, even without a mobile network.</p></div>
+  <div class="card glass">
+   <div class="row sp"><h3 style="margin:0">Rainfall simulator</h3><b id="rv" style="font-size:1.4rem"></b></div>
+   <input id="rain" type="range" min="0" max="200" value="85" aria-label="Rainfall in the last 24 hours">
+   <div class="row" style="margin-top:8px"><button class="btn" data-act="pre" data-v="10">Dry</button><button class="btn" data-act="pre" data-v="90">Heavy rain</button><button class="btn" data-act="pre" data-v="180">Cloudburst</button></div>
+   <p class="mu" style="margin:10px 0 0">Move the slider. Every zone, alert and ranking updates. Tap a zone on the map to select it.</p>
+  </div>
+  <div class="card glass" id="zcard"></div>
+ </div></div>
+</section>
+
+
+
+<section class="sec"><svg class="dash" viewBox="0 0 1000 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 100 C250 0 420 190 650 90 S900 20 1000 80"/></svg>
+ <div class="wrap"><h2 id="vt"></h2><div class="mu" id="vs"></div><div id="view" style="margin-top:14px"></div></div></section>
+</main>
+<footer><div class="wrap">Prototype interface with sample data. No backend is connected. SIH 2026, Problem Statement SIH26001, Team InnovateX (122747)</div></footer>
+<div id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const Z=[
+{n:'NH-48 Ghat Bend',b:.82,p:[18.765,73.379],k:'Road'},
+{n:'Kalwan Colony Slope',b:.66,p:[18.748,73.407],k:'Colony'},
+{n:'Temple Road Cut',b:.55,p:[18.733,73.47],k:'Road'},
+{n:'Riverside Ward 4',b:.38,p:[18.5204,73.8567],k:'Colony'},
+{n:'School Hill Road',b:.24,p:[18.536,73.833],k:'Road'},
+{n:'Market Bridge Approach',b:.1,p:[18.47,73.89],k:'Road'}];
+let R=[
+{z:1,t:'Soil crack near retaining wall',by:'Volunteer Anil',ai:92,st:'pending'},
+{z:0,t:'Rockfall on road shoulder',by:'Citizen',ai:88,st:'pending'},
+{z:3,t:'Muddy water from slope',by:'Citizen',ai:31,st:'pending'},
+{z:2,t:'Tilted electric pole',by:'Volunteer Meera',ai:79,st:'verified'}];
+let rain=85,sel=0,role='citizen',off=false,sent=2,dms={on:false,t:30,hit:false};
+const ROLES={citizen:['Citizen','Know your risk, get alerts, report what you see.'],volunteer:['Volunteer','Verify on the ground and stay safe in the field.'],official:['Government Official','Decide where to act first and send alerts.'],admin:['Admin','Keep data, models, users and alert channels healthy.']};
+const sc=(z,r=rain)=>Math.min(10,+(z.b*4+r/100*3.5*(.5+z.b*.7)).toFixed(1));
+const lv=s=>s<2.5?['Low','low']:s<5?['Moderate','mod']:s<7.5?['High','high']:['Critical','crit'];
+const col=c=>`var(--${c})`;
+const bd=s=>{const[l,c]=lv(s);return`<span class="b ${c}">${l}</span>`};
+const adv=['Normal activity. Stay informed.','Be alert. Avoid steep roadside slopes after dark.','Avoid this area. Keep a bag ready and know your route out.','Evacuate now. Move to the nearest safe point.'];
+const ai=s=>['low','mod','high','crit'].indexOf(lv(s)[1]);
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._);t._=setTimeout(()=>t.classList.remove('on'),2600)}
+function spark(z){const p=[0,1,2,3,4,5].map(i=>sc(z,rain*(.55+.09*i)));const pts=p.map((v,i)=>`${i*24+4},${36-v*3.2}`).join(' ');const c=lv(p[5])[1];
+ return{svg:`<svg viewBox="0 0 128 40" width="128" height="40" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${col(c)}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,txt:p[5]-p[0]>1?'Rising fast':p[5]-p[0]>.3?'Rising':'Steady'}}
+const CARTO_KEY='cb1_4eyr_1_8f0616419faac59ceba5a754';
+let LM,LG;
+function fit(){if(!LM)return;LM.invalidateSize();const h=document.querySelector('.hero'),w=innerWidth>860,hl=document.querySelector('.hl').getBoundingClientRect();
+ LM.fitBounds(L.latLngBounds(Z.map(z=>z.p)),{paddingTopLeft:w?[hl.right+30,110]:[16,Math.max(h.offsetHeight-340,120)],paddingBottomRight:[50,70],maxZoom:12,animate:false})}
+function map(pan){
+ if(typeof L=='undefined'){$('map').innerHTML='<p class="mu" style="padding:120px 20px">The map needs an internet connection.</p>';return}
+ if(!LM){LM=L.map('map',{zoomControl:false,scrollWheelZoom:false,dragging:innerWidth>860}).setView([18.6,73.6],10);
+  L.control.zoom({position:'bottomright'}).addTo(LM);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key='+CARTO_KEY,{maxZoom:19,subdomains:'abcd',attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(LM);
+  LG=L.layerGroup().addTo(LM);fit();setTimeout(fit,400)}
+ LG.clearLayers();
+ Z.forEach((z,i)=>{const s=sc(z),c=lv(s)[1],d=34+s*3;
+  const ic=L.divIcon({className:'',iconSize:[0,0],html:`<div class="zm ${i==sel?'sel':''}" style="--c:${col(c)};--d:${d}px">${c=='crit'?'<b></b>':''}<i></i><span>${z.n}</span></div>`});
+  L.marker(z.p,{icon:ic,title:z.n+', '+lv(s)[0]+' risk'}).on('click',()=>{sel=i;zcard();view();map()}).addTo(LG)});
+ if(pan)LM.panTo(Z[sel].p)}
+function zcard(){const z=Z[sel],s=sc(z),sp=spark(z);
+ $('zcard').innerHTML=`<div class="row sp"><div><div class="mu">Selected zone (${z.k.toLowerCase()})</div><h3 style="margin:0;font-size:1.15rem">${z.n}</h3></div>${bd(s)}</div>
+ <div class="row sp" style="margin-top:10px"><div><span class="big">${s}</span><span class="mu"> / 10</span></div><div style="text-align:right">${sp.svg}<div class="mu">Next 6 hours: ${sp.txt}</div></div></div>
+ <p class="mu" style="margin:8px 0 0">${adv[ai(s)]}</p>`}
+const pend=()=>R.filter(r=>r.st=='pending').length;
+const rep=r=>`<li><div class="row sp"><span>${r.t}<br><span class="mu">${Z[r.z].n}, ${r.by}</span></span><span class="b ${r.ai>=80?'low':r.ai>=60?'mod':'crit'}">AI ${r.ai}%</span></div>`;
+const V={
+citizen(){const z=Z[sel],s=sc(z),top=[...Z].sort((a,b)=>sc(b)-sc(a))[0],ts=sc(top),hi=ts>=5;
+ return`<div class="g">
+ <div class="card"><h3>Alerts for you</h3><ul class="clean">${Z.filter(z=>sc(z)>=5).sort((a,b)=>sc(b)-sc(a)).map(z=>`<li class="row sp"><span>${z.n}<br><span class="mu">${adv[ai(sc(z))]}</span></span>${bd(sc(z))}</li>`).join('')||'<li class="mu">No High or Critical zones right now.</li>'}</ul><p class="mu" style="margin:8px 0 0">Sent by app push, SMS and call.</p></div>
+ <div class="card"><h3>Safer route</h3>${hi?`<div class="row sp"><span>Fastest, 24 min<br><span class="mu">Passes ${top.n}</span></span>${bd(ts)}</div><hr style="border:0;border-top:1px solid var(--ln)"><div class="row sp"><span>Safer, 36 min<br><span class="mu">Via Ring Road. Avoids every High and Critical zone.</span></span><span class="b low">Recommended</span></div>`:'<p style="margin:0">Your usual route is clear. No High or Critical zones on the way.</p>'}</div>
+ <div class="card"><h3>Report a danger</h3><label class="mu">What did you see?<select id="ct"><option>Crack in ground or wall</option><option>Rockfall</option><option>Muddy water from slope</option><option>Tilted trees or poles</option></select></label>
+ <label class="mu">Photo<input type="file" accept="image/*"></label>
+ <label class="row mu" style="margin-bottom:10px"><input type="checkbox" id="off" ${off?'checked':''} data-act="off"> I have no network (offline mode)</label>
+ <button class="btn p" data-act="rep">Send report</button></div>
+ <div class="card"><h3>Alert on a basic phone</h3><div class="sms"><b>LANDSLIDE RAKSHA</b><br>${lv(s)[0]} risk at ${z.n}. ${adv[ai(s)]} Reply SAFE if you are OK.</div><p class="mu" style="margin:10px 0 0">No smartphone or internet needed. Pick another zone on the map to change this text.</p></div></div>`},
+volunteer(){const t=[...Z].sort((a,b)=>sc(b)-sc(a)).slice(0,3);
+ return`<div class="g">
+ <div class="card"><h3>Your assigned zones</h3><ul class="clean">${t.map(z=>`<li class="row sp"><span>${z.n}<br><span class="mu">${lv(sc(z))[0]}, ${R.filter(r=>Z[r.z]==z&&r.st=='pending').length} reports waiting</span></span><button class="btn" data-act="sel" data-i="${Z.indexOf(z)}">Show on map</button></li>`).join('')}</ul></div>
+ <div class="card"><h3>Ground reports</h3><ul class="clean">${R.map(r=>rep(r)+`<div class="mu">${r.st=='pending'?'Waiting for review':'Verified by officials'}</div></li>`).join('')}</ul><button class="btn p" style="margin-top:8px" data-act="rep">Add report with photo</button></div>
+ <div class="card"><h3>Dead Man's Switch</h3><p class="mu" style="margin-top:0">If you stop checking in, your GPS location goes to the control room.</p><div class="big" id="dms">${dms.hit?'Sent':dms.t+'s'}</div><div class="row" style="margin-top:10px"><button class="btn p" data-act="dms">${dms.on?'I am safe':'Start check-in'}</button><button class="btn d" data-act="sos">SOS</button></div><div class="mu" style="margin-top:8px">${dms.hit?'Location shared with control room.':dms.on?'Tap "I am safe" before the timer ends.':'Timer is off.'}</div></div>
+ <div class="card"><h3>Offline mesh</h3><ul class="clean"><li class="row sp">BLE Mesh<span class="b low">4 nearby phones</span></li><li class="row sp">LoRa gateway<span class="b low">Connected</span></li><li class="row sp">Mobile network<span class="b high">Weak</span></li></ul></div></div>`},
+official(){const o=[...Z].sort((a,b)=>sc(b)-sc(a)),c=o.filter(z=>sc(z)>=7.5).length,h=o.filter(z=>{const s=sc(z);return s>=5&&s<7.5}).length;
+ const act=['Routine','Monitor','Inspect soon','Inspect now'];
+ return`<div class="g" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+ ${[['Critical zones',c],['High zones',h],['Reports to review',pend()],['Alerts sent today',sent]].map(k=>`<div class="card"><div class="big">${k[1]}</div><div class="mu">${k[0]}</div></div>`).join('')}</div>
+ <div class="card"><h3>Where to act first</h3><div class="tw"><table><tr><th>#</th><th>Zone</th><th>Risk</th><th>Score</th><th>Action</th><th></th></tr>
+ ${o.map((z,i)=>{const s=sc(z),c=lv(s)[1];return`<tr><td>${i+1}</td><td>${z.n}</td><td>${bd(s)}</td><td><div class="meter"><i style="width:${s*10}%;background:${col(c)}"></i></div></td><td>${act[ai(s)]}</td><td>${s>=5?`<button class="btn" data-act="alert" data-i="${Z.indexOf(z)}">Send alert</button>`:''}</td></tr>`}).join('')}</table></div></div>
+ <div class="g" style="margin-top:14px"><div class="card"><h3>Report verification</h3><ul class="clean">${R.filter(r=>r.st=='pending').map(r=>{const i=R.indexOf(r);return rep(r)+`<div class="row" style="margin-top:6px">${r.ai>=85?'<span class="b crit">Fast-track</span>':''}<button class="btn p" data-act="ok" data-i="${i}">Approve</button><button class="btn" data-act="no" data-i="${i}">Reject</button></div></li>`}).join('')||'<li class="mu">All reports reviewed.</li>'}</ul></div>
+ <div class="card"><h3>Evacuation plan</h3><p class="mu" style="margin-top:0">For ${Z[sel].n}</p><p style="margin:0 0 10px">Route to the nearest relief shelter, kept clear of High and Critical zones. Shared with responders and the citizen app in local languages.</p><button class="btn p" data-act="evac">Publish evacuation route</button></div></div>`},
+admin(){const H=[['Open-Meteo weather API','Online','low'],['Ground sensors','14 of 16 online','mod'],['XGBoost risk model','Version 1.3, updated today','low'],['SMS and call gateway','Online','low'],['LoRa gateway','Online','low'],['BLE mesh nodes','38 active','low']];
+ const P=[['See risk map','y','y','y','y'],['Report a danger','y','y','n','n'],['Verify reports','n','n','y','y'],['Send alerts','n','n','y','y'],['Manage users and zones','n','n','n','y'],['Retrain model','n','n','n','y']];
+ return`<div class="g"><div class="card"><h3>System status</h3><ul class="clean">${H.map(h=>`<li class="row sp">${h[0]}<span class="b ${h[2]}">${h[1]}</span></li>`).join('')}</ul></div>
+ <div class="card"><h3>Model quality (sample values)</h3>${[['Recall',94],['Precision',89],['F1-score',91]].map(m=>`<div class="row sp mu"><span>${m[0]}</span><span>${m[1]}%</span></div><div class="meter" style="margin-bottom:10px"><i style="width:${m[1]}%;background:var(--ac)"></i></div>`).join('')}<p class="mu" style="margin:0">Recall matters most: a missed landslide costs more than an extra warning.</p></div>
+ <div class="card"><h3>Users</h3><ul class="clean"><li class="row sp">Citizens<b>12,480</b></li><li class="row sp">Volunteers<b>326</b></li><li class="row sp">Government officials<b>41</b></li><li class="row sp">Admins<b>3</b></li></ul></div></div>
+ <div class="card tw"><h3>Who can do what</h3><table><tr><th>Capability</th><th>Citizen</th><th>Volunteer</th><th>Official</th><th>Admin</th></tr>${P.map(p=>`<tr><td>${p[0]}</td>${p.slice(1).map(v=>`<td>${v=='y'?'Yes':'<span class="mu">No</span>'}</td>`).join('')}</tr>`).join('')}</table></div>`}};
+function view(){$('vt').textContent=ROLES[role][0]+' view';$('vs').textContent=ROLES[role][1];$('view').innerHTML=V[role]();
+ document.querySelectorAll('#menu li').forEach(t=>t.setAttribute('aria-selected',t.dataset.r==role));$('pcur').textContent=ROLES[role][0]}
+function all(){$('rv').textContent=rain+' mm';map();zcard();view()}
+$('menu').innerHTML=Object.keys(ROLES).map(r=>`<li role="option" tabindex="0" data-r="${r}">${ROLES[r][0]}</li>`).join('');
+const pb=$('pbtn'),mn=$('menu');
+const shut=()=>{mn.hidden=true;pb.setAttribute('aria-expanded','false')};
+pb.onclick=e=>{e.stopPropagation();const o=mn.hidden;mn.hidden=!o;pb.setAttribute('aria-expanded',o)};
+mn.onclick=e=>{const li=e.target.closest('li');if(li){role=li.dataset.r;view();shut();pb.focus()}};
+mn.onkeydown=e=>{if(e.key=='Enter'||e.key==' '){e.preventDefault();e.target.click()}};
+document.addEventListener('click',shut);
+document.addEventListener('keydown',e=>{if(e.key=='Escape')shut();if((e.key=='Enter'||e.key==' ')&&e.target.matches('.zone')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}});
+addEventListener('resize',()=>{map();fit()});
+$('rain').oninput=e=>{rain=+e.target.value;all()};
+document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const k=a.dataset.act,i=+a.dataset.i;
+ if(k=='sel'){sel=i;map(1);zcard();view()}
+ else if(k=='pre'){rain=+a.dataset.v;$('rain').value=rain;all()}
+ else if(k=='off'){off=a.checked}
+ else if(k=='rep'){const ct=$('ct');R.unshift({z:sel,t:ct?ct.value:'Ground observation with photo',by:role=='citizen'?'You':'Volunteer',ai:84,st:'pending'});view();toast(off?'Saved on your phone. It will send when the network returns.':'Report sent. AI check is running.')}
+ else if(k=='ok'){R[i].st='verified';sent+=sc(Z[R[i].z])>=5?1:0;view();toast('Report verified. Zone priority updated.')}
+ else if(k=='no'){R.splice(i,1);view();toast('Report rejected as spam or not actionable.')}
+ else if(k=='alert'){sent++;view();toast('Alert queued: SMS, app push and call for '+Z[i].n+'. BLE Mesh and LoRa relay on.')}
+ else if(k=='evac'){toast('Evacuation route for '+Z[sel].n+' published.')}
+ else if(k=='sos'){toast('SOS sent with your GPS location to the control room.')}
+ else if(k=='dms'){dms.on=!dms.on;dms.t=30;dms.hit=false;view();toast(dms.on?'Check-in timer started.':'Marked safe. Timer stopped.')}});
+setInterval(()=>{if(!dms.on)return;dms.t--;if(dms.t<=0){dms.on=false;dms.hit=true;view();toast('No check-in. GPS location shared with the control room.');return}const d=$('dms');if(d)d.textContent=dms.t+'s'},1000);
+all();
+</script></body></html>
